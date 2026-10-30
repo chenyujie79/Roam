@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Roam · 私人旅游助手</title>
+<style>
+  :root {
+    --bg: #E9EEE9; --card: #FFFFFF;
+    --pine: #14524A; --pine-deep: #0C3B35; --pine-soft: #E2EDE9;
+    --signal: #E85D2F; --signal-soft: #FCEAE2;
+    --ink: #22332F; --ink-mute: #5F6E69; --line: #D4DED8;
+    --sky: #2E6E8E;
+    --sans: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    --mono: "SFMono-Regular", Consolas, Menlo, "Courier New", monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--ink); font-size: 15px; line-height: 1.6; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  button { font-family: inherit; cursor: pointer; }
+  a { text-decoration: none; color: inherit; }
+
+  /* ================= 三栏外壳 ================= */
+  .shell {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr) 384px;
+    gap: 16px;
+    padding: 16px;
+    max-width: 1560px;
+    margin: 0 auto;
+    height: 100dvh;
+    min-height: 620px;
+  }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; min-height: 0; }
+
+  /* 左侧导航栏 */
+  .rail { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 8px; }
+  .rail-nav { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .rail-btn {
+    width: 44px; height: 44px; border-radius: 12px; border: 1px solid transparent; background: transparent;
+    display: grid; place-items: center; color: var(--ink-mute); transition: background .15s, color .15s;
+  }
+  .rail-btn svg { width: 21px; height: 21px; }
+  .rail-btn:hover, .rail-btn:focus-visible { background: var(--pine-soft); color: var(--pine); outline: none; }
+  .rail-btn[aria-current="true"] { background: var(--pine); color: #fff; }
+  .rail-foot { margin-top: auto; font-family: var(--mono); font-size: 10px; color: var(--ink-mute); writing-mode: vertical-rl; letter-spacing: 2px; }
+
+  /* 中间主区 */
+  .main { display: flex; flex-direction: column; overflow: hidden; }
+  .main-head {
+    height: 58px; flex-shrink: 0; padding: 0 22px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .main-head .who { font-weight: 700; font-size: 15px; }
+  .main-head .status { width: 8px; height: 8px; border-radius: 50%; background: #3B8A4E; }
+  .main-head .sub { font-size: 12px; color: var(--ink-mute); }
+  .main-head .phase {
+    margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--pine);
+    background: var(--pine-soft); border-radius: 20px; padding: 3px 12px;
+  }
+  .main-body { flex: 1; min-height: 0; overflow-y: auto; }
+
+  /* 空状态 */
+  .empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px 24px; }
+  .empty .stage-mascot { position: relative; width: 200px; height: 200px; display: grid; place-items: center; margin-bottom: 22px; }
+  .empty .stage-mascot > svg.m { width: 132px; height: 132px; }
+  .orbit { position: absolute; width: 200px; height: 200px; animation: spin 26s linear infinite; transform-origin: 50% 50%; }
+  .orbit .ring { fill: none; stroke: #C7D6CD; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 2 17; }
+  .orbit .dot { fill: var(--signal); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .orbit { animation: none; } }
+  .empty h2 { font-size: 20px; font-weight: 700; letter-spacing: .5px; }
+  .empty p { font-size: 13px; color: var(--ink-mute); margin-top: 8px; max-width: 34ch; }
+  .btn-primary {
+    margin-top: 22px; display: inline-block; border: none; border-radius: 10px; background: var(--signal); color: #fff;
+    font-size: 14px; font-weight: 700; padding: 12px 30px; transition: background .15s, transform .1s;
+  }
+  .btn-primary:hover, .btn-primary:focus-visible { background: #C74820; outline: none; }
+  .btn-primary:active { transform: translateY(1px); }
+  .empty .hint { margin-top: 14px; font-family: var(--mono); font-size: 11px; color: #8AA098; }
+
+  /* 对话 */
+  .chat-body { padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+  .msg { max-width: 86%; display: flex; flex-direction: column; gap: 4px; }
+  .msg .who { font-size: 12px; color: var(--ink-mute); }
+  .msg.agent { align-self: flex-start; }
+  .msg.user { align-self: flex-end; align-items: flex-end; }
+  .with-avatar { display: flex; gap: 9px; align-items: flex-start; }
+  .avatar { width: 34px; height: 34px; flex-shrink: 0; border-radius: 50%; background: var(--pine-soft); display: grid; place-items: center; }
+  .avatar svg { width: 30px; height: 30px; }
+  .bubble { padding: 10px 14px; border-radius: 4px 14px 14px 14px; background: var(--pine-soft); }
+  .msg.agent .bubble { border-top-left-radius: 2px; }
+  .msg.user .bubble { background: var(--pine); color: #F2F7F4; border-radius: 14px 4px 14px 14px; }
+  .slot-check { margin-top: 6px; padding: 10px 14px; border: 1px dashed var(--line); border-radius: 10px; background: #FBFCFB; font-size: 13px; }
+  .slot-check ul { list-style: none; margin-top: 6px; }
+  .slot-check li { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+  .slot-check .ok { color: #3B8A4E; font-family: var(--mono); }
+  .slot-check .todo { color: var(--signal); font-family: var(--mono); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .chip { font-size: 13px; padding: 6px 14px; border-radius: 20px; border: 1px solid var(--pine); background: #fff; color: var(--pine); transition: background .15s, color .15s; }
+  .chip:hover, .chip:focus-visible { background: var(--pine); color: #fff; outline: none; }
+  .chip.picked { background: var(--pine); color: #fff; }
+  .composer { flex-shrink: 0; display: flex; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--line); }
+  .composer input { flex: 1; font: inherit; padding: 11px 15px; border: 1px solid var(--line); border-radius: 10px; background: #FBFCFB; color: var(--ink); }
+  .composer input:focus { outline: 2px solid var(--pine); outline-offset: 1px; }
+  .composer button { font-weight: 700; padding: 11px 24px; border: none; border-radius: 10px; background: var(--signal); color: #fff; }
+  .composer button:hover, .composer button:focus-visible { background: #C74820; outline: none; }
+
+  /* 行程票 */
+  .tickets { padding: 22px; display: flex; flex-direction: column; gap: 18px; }
+  .ticket-head { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .route-big { font-family: var(--mono); font-size: 30px; font-weight: 700; color: var(--pine); letter-spacing: 1px; }
+  .route-big .arrow { color: var(--signal); font-size: 22px; }
+  .route-city { font-size: 13px; color: var(--ink-mute); }
+  .ticket-head .meta { margin-left: auto; font-family: var(--mono); font-size: 13px; text-align: right; color: var(--ink-mute); line-height: 1.9; }
+  .ticket-head .meta strong { color: var(--ink); font-size: 15px; }
+  .ticket { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .ticket-bar { display: flex; align-items: center; gap: 12px; padding: 11px 20px; background: var(--pine); color: #EAF4EF; }
+  .ticket-bar .day { font-family: var(--mono); font-size: 14px; font-weight: 700; letter-spacing: 1px; }
+  .ticket-bar .date { font-family: var(--mono); font-size: 13px; color: #9DBBB2; }
+  .ticket-bar .tag { margin-left: auto; font-size: 12px; padding: 2px 12px; border-radius: 20px; background: rgba(255,255,255,.14); }
+  .ticket-bar .tag.rain { background: #35566B; }
+  .ticket-body { padding: 15px 20px 17px; }
+  .leg { display: flex; gap: 14px; }
+  .leg + .leg { margin-top: 12px; }
+  .leg-time { font-family: var(--mono); font-size: 13px; color: var(--pine); width: 92px; flex-shrink: 0; padding-top: 2px; text-align: right; }
+  .leg-main { flex: 1; min-width: 0; }
+  .leg-title { font-weight: 700; font-size: 15px; }
+  .leg-note { font-size: 13px; color: var(--ink-mute); }
+  .leg-cost { font-family: var(--mono); font-size: 13px; color: var(--signal); white-space: nowrap; padding-top: 2px; }
+  .transit { display: flex; align-items: center; gap: 8px; margin: 10px 0 10px 106px; font-family: var(--mono); font-size: 12px; color: var(--sky); }
+  .transit::before { content: ""; width: 34px; border-top: 1px dashed var(--sky); }
+  .transit .wait { color: var(--ink-mute); }
+  .tear { position: relative; border-top: 2px dashed var(--line); margin: 4px 20px 0; }
+  .tear::before, .tear::after { content: ""; position: absolute; top: -10px; width: 18px; height: 18px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); }
+  .tear::before { left: -29px; } .tear::after { right: -29px; }
+  .ticket-foot { display: flex; gap: 18px; padding: 11px 20px 15px; font-size: 13px; color: var(--ink-mute); flex-wrap: wrap; }
+  .ticket-foot b { font-family: var(--mono); color: var(--ink); font-weight: 400; }
+  .ticket-foot .check { color: #3B8A4E; } .ticket-foot .check::before { content: "✓ "; font-family: var(--mono); }
+  .budget { background: var(--pine-deep); color: #DDEBE4; border-color: var(--pine-deep); }
+  .budget h3 { font-size: 15px; font-weight: 700; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .budget h3 .total { font-family: var(--mono); font-size: 23px; color: #fff; }
+  .budget h3 .cap { font-family: var(--mono); font-size: 13px; color: #9DBBB2; }
+  .bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; margin: 14px 0 16px; }
+  .bar i { display: block; height: 100%; }
+  .b1 { width: 27%; background: var(--signal); } .b2 { width: 32%; background: #3E9C7F; }
+  .b3 { width: 22%; background: #6FA8C9; } .b4 { width: 12%; background: #D9A441; } .b5 { width: 7%; background: #8B85C1; }
+  .budget-rows { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 20px; font-family: var(--mono); font-size: 13px; }
+  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 8px; }
+  .budget-rows .amt { float: right; color: #fff; }
+  .budget .left { margin-top: 14px; font-size: 13px; color: #9DBBB2; }
+  .budget .left b { font-family: var(--mono); color: #F5C9A8; font-weight: 400; }
+
+  /* ================= 右栏：City Memory 入口 ================= */
+  .side { display: flex; flex-direction: column; overflow: hidden; }
+  .side-head { padding: 16px 18px 12px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+  .side-title { font-size: 16px; font-weight: 700; color: var(--pine); }
+  .side-title em { font-style: normal; color: var(--signal); }
+  .side-stats { font-family: var(--mono); font-size: 11.5px; color: var(--ink-mute); margin-top: 4px; }
+  .side-stats b { color: var(--signal); font-weight: 700; }
+  .cmx-body { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 26px 22px; }
+  .cmx-art { width: 190px; margin-bottom: 18px; }
+  .cmx-body h3 { font-size: 15px; font-weight: 700; }
+  .cmx-body .desc { font-size: 13px; color: var(--ink-mute); margin-top: 8px; max-width: 30ch; }
+  .cmx-feats { list-style: none; margin: 16px 0 4px; text-align: left; font-size: 12.5px; color: var(--ink-mute); display: grid; gap: 6px; }
+  .cmx-feats li::before { content: "✓ "; color: #3B8A4E; font-family: var(--mono); }
+  .cmx-open {
+    margin-top: 18px; display: inline-block; border: none; border-radius: 10px; background: var(--pine); color: #fff;
+    font-size: 14px; font-weight: 700; padding: 11px 28px; transition: background .15s;
+  }
+  .cmx-open:hover, .cmx-open:focus-visible { background: var(--pine-deep); outline: none; }
+  .cmx-note { margin-top: 12px; font-family: var(--mono); font-size: 11px; color: #8AA098; }
+
+  /* 形象设计位（左上角预留空间） */
+  .mascot-slot {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    border: none; background: transparent; padding: 2px;
+  }
+  .mascot-slot .slot-frame {
+    width: 54px; height: 54px; border-radius: 16px; display: grid; place-items: center;
+    border: 2px dashed #B9CCC2; background: var(--pine-soft); transition: border-color .15s, transform .15s;
+  }
+  .mascot-slot .slot-frame svg { width: 44px; height: 44px; }
+  .mascot-slot .slot-name { font-size: 10px; font-weight: 700; color: var(--pine); letter-spacing: 1px; }
+  .mascot-slot .slot-cap { font-family: var(--mono); font-size: 8.5px; color: #8AA098; }
+  .mascot-slot:hover .slot-frame, .mascot-slot:focus-visible .slot-frame {
+    border-color: var(--signal); transform: translateY(-1px); outline: none;
+  }
+
+  /* 形象设计室浮层 */
+  .studio { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 24px; }
+  .studio-mask { position: absolute; inset: 0; background: rgba(12,59,53,.55); }
+  .studio-panel {
+    position: relative; width: min(860px, 94vw); max-height: 88vh; overflow-y: auto;
+    background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 24px 26px;
+    box-shadow: 0 24px 60px rgba(12,59,53,.35);
+  }
+  .studio-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .studio-head h2 { font-size: 17px; font-weight: 700; color: var(--pine); }
+  .studio-head h2 em { font-style: normal; color: var(--signal); }
+  .studio-head .close {
+    margin-left: auto; width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--line);
+    background: #fff; color: var(--ink-mute); font-size: 14px; line-height: 1;
+  }
+  .studio-head .close:hover, .studio-head .close:focus-visible { color: var(--signal); outline: none; }
+  .studio-sub { font-size: 12.5px; color: var(--ink-mute); margin-bottom: 18px; }
+  .studio-grid { display: grid; grid-template-columns: 300px minmax(0,1fr); gap: 22px; }
+  @media (max-width: 760px) { .studio-grid { grid-template-columns: 1fr; } }
+  .studio-stage {
+    background: var(--pine-soft); border: 1px dashed #B9CCC2; border-radius: 16px;
+    display: grid; place-items: center; padding: 22px; position: relative; min-height: 300px;
+  }
+  .studio-stage .orbit { position: absolute; width: 240px; height: 240px; }
+  .studio-stage svg.m { width: 190px; height: 190px; position: relative; }
+  .studio-stage .tag {
+    position: absolute; left: 10px; top: 10px; font-family: var(--mono); font-size: 10px;
+    color: var(--pine); background: rgba(255,255,255,.75); padding: 3px 9px; border-radius: 12px;
+  }
+  .studio-sec h3 { font-size: 12px; font-weight: 700; color: var(--ink-mute); letter-spacing: 1px; margin: 4px 0 8px; }
+  .face-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .face-chip {
+    display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; padding: 7px 13px;
+    border-radius: 18px; border: 1px solid var(--line); background: #FBFCFB; color: var(--ink);
+    transition: border-color .15s, background .15s;
+  }
+  .face-chip svg { width: 22px; height: 22px; }
+  .face-chip:hover, .face-chip:focus-visible { border-color: var(--pine); outline: none; }
+  .face-chip[aria-pressed="true"] { background: var(--pine); color: #fff; border-color: var(--pine); }
+  .reserve-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .reserve-card {
+    border: 2px dashed #C7D6CD; border-radius: 12px; min-height: 92px; display: grid; place-items: center;
+    align-content: center; gap: 3px; color: #8AA098; font-size: 12px; text-align: center; padding: 10px;
+  }
+  .reserve-card .rt { font-weight: 700; color: var(--ink-mute); font-size: 12.5px; }
+  .reserve-card .rs { font-family: var(--mono); font-size: 10px; }
+  .studio-note { margin-top: 16px; font-family: var(--mono); font-size: 11px; color: #8AA098; }
+
+  /* 响应式 */
+  @media (max-width: 1180px) {
+    .shell { grid-template-columns: 68px minmax(0, 1fr) 330px; }
+  }
+  @media (max-width: 980px) {
+    .shell { display: flex; flex-direction: column; height: auto; min-height: 100dvh; }
+    .rail { flex-direction: row; align-items: center; padding: 10px 12px; }
+    .rail-nav { flex-direction: row; margin: 0 0 0 auto; }
+    .rail-foot { display: none; }
+    .main { min-height: 70dvh; }
+    .side { min-height: 420px; }
+  }
+</style>
+</head>
+<body>
+<h1 class="sr-only">Roam 私人旅游助手：中间与小R对话规划行程，右栏进入 City Memory 记录城市记忆</h1>
+
+<div class="shell">
+
+  <!-- 左：导航栏 -->
+  <aside class="card rail" aria-label="主导航">
+    <button class="mascot-slot" type="button" id="mascot-slot" aria-haspopup="dialog" title="小R 形象设计空间">
+      <span class="slot-frame">
+        <svg class="roam-svg" viewBox="0 0 200 200" aria-hidden="true"><use id="slot-face" href="#roam-face-normal"></use></svg>
+      </span>
+      <span class="slot-name">小R</span>
+      <span class="slot-cap">形象位</span>
+    </button>
+    <nav class="rail-nav">
+      <button class="rail-btn" type="button" data-nav="empty" aria-current="true" title="找小R规划" aria-label="找小R规划">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 1 1-3.2-6.4"/><path d="M21 4v5h-5"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></svg>
+      </button>
+      <button class="rail-btn" type="button" data-nav="tickets" title="行程单" aria-label="行程单">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 6v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-6z"/><path d="M12 6v2M12 11v2M12 16v2" stroke-dasharray="2 2"/></svg>
+      </button>
+      <a class="rail-btn" href="city-memory.html" title="City Memory" aria-label="打开 City Memory">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>
+      </a>
+    </nav>
+    <div class="rail-foot">ROAM · 私人旅游助手</div>
+  </aside>
+
+  <!-- 中：主区 -->
+  <main class="card main">
+    <div class="main-head">
+      <span class="status" aria-hidden="true"></span>
+      <span class="who">小R</span>
+      <span class="sub">私人旅游助手</span>
+      <span class="phase" id="phase-chip">随时待命</span>
+    </div>
+
+    <div class="main-body">
+      <!-- 空状态 -->
+      <section class="empty" id="state-empty" aria-label="开始规划">
+        <div class="stage-mascot">
+          <svg class="orbit" viewBox="0 0 200 200" aria-hidden="true">
+            <circle class="ring" cx="100" cy="100" r="86"></circle>
+            <circle class="dot" cx="186" cy="96" r="7"></circle>
+          </svg>
+          <svg class="m roam-svg" viewBox="0 0 200 200" aria-hidden="true"><use href="#roam-face-happy"></use></svg>
+        </div>
+        <h2>车票已备好，就差一趟出发</h2>
+        <p>告诉我时间、目的地和预算，行程马上排好。</p>
+        <button class="btn-primary" type="button" id="start-plan">开始规划</button>
+        <div class="hint">小R 会主动问清剩下的细节</div>
+      </section>
+
+      <!-- 对话 -->
+      <section id="state-chat" hidden aria-label="与小R对话">
+        <div class="chat-body">
+          <div class="msg agent">
+            <span class="who">小R</span>
+            <div class="with-avatar">
+              <span class="avatar"><svg class="roam-svg" viewBox="0 0 200 200" aria-hidden="true"><use href="#roam-face-normal"></use></svg></span>
+              <div>
+                <div class="bubble">出发前我先确认几件事，都齐了就给你排行程。你的偏好和忌口我会记着，下次规划直接沿用。</div>
+                <div class="slot-check">
+                  已确认 <span class="ok">5/7</span> · 差 2 项
+                  <ul>
+                    <li><span class="ok">✓</span>时间：11月2日 – 5日</li>
+                    <li><span class="ok">✓</span>出发地：广州</li>
+                    <li><span class="ok">✓</span>目的地：成都</li>
+                    <li><span class="ok">✓</span>人数：2 人</li>
+                    <li><span class="ok">✓</span>偏好：美食、自然风光</li>
+                    <li><span class="todo">○</span>预算范围（待确认）</li>
+                    <li><span class="todo">○</span>禁忌事项（待确认）</li>
+                  </ul>
+                  <div class="chips" role="group" aria-label="预算快捷选项">
+                    <button class="chip" type="button">人均 ¥3,000 以内</button>
+                    <button class="chip" type="button">人均 ¥4,000 左右</button>
+                    <button class="chip" type="button">不设上限</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="msg user"><span class="who">你</span><div class="bubble">两个人总共 8000 吧。不吃辣可以吗？我们肠胃不太行。</div></div>
+          <div class="msg agent">
+            <span class="who">小R</span>
+            <div class="with-avatar">
+              <span class="avatar"><svg class="roam-svg" viewBox="0 0 200 200" aria-hidden="true"><use href="#roam-face-happy"></use></svg></span>
+              <div class="bubble">收到：总预算 ¥8,000，忌辛辣。天气、开放时间、门票和交通都查过了，都江堰那天有小雨，索道段已替换。行程单在左边票夹图标里，随时能改。</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 行程单 -->
+      <section class="tickets" id="state-tickets" hidden aria-label="生成的行程方案">
+        <div class="ticket-head">
+          <div>
+            <div class="route-big">CAN <span class="arrow">→</span> CTU</div>
+            <div class="route-city">广州 → 成都 · 双流国际机场</div>
+          </div>
+          <div class="meta"><div><strong>第 3 版</strong> · 11.02 – 11.05</div><div>2 人 · 纯玩慢节奏</div></div>
+        </div>
+
+        <article class="ticket">
+          <div class="ticket-bar"><span class="day">DAY 1</span><span class="date">11.02 周一</span><span class="tag">多云 14–21°</span></div>
+          <div class="ticket-body">
+            <div class="leg"><span class="leg-time">09:30–12:05</span><div class="leg-main"><div class="leg-title">CZ3413 广州 → 成都</div><div class="leg-note">机场专线进城，约 40 分钟</div></div><span class="leg-cost">¥1,560 × 2</span></div>
+            <div class="transit">地铁 10 号线 · 40 分钟 <span class="wait">+ 午餐 60 分钟</span></div>
+            <div class="leg"><span class="leg-time">14:00–17:00</span><div class="leg-main"><div class="leg-title">宽窄巷子</div><div class="leg-note">已选清淡小店，避开辛辣菜系</div></div><span class="leg-cost">免费</span></div>
+            <div class="transit">步行 · 8 分钟</div>
+            <div class="leg"><span class="leg-time">17:10–20:00</span><div class="leg-main"><div class="leg-title">人民公园 · 鹤鸣茶社</div><div class="leg-note">盖碗茶 + 采耳，收尾第一天</div></div><span class="leg-cost">¥60</span></div>
+          </div>
+          <div class="tear" aria-hidden="true"></div>
+          <div class="ticket-foot"><span>宿 <b>太古里亚朵 · ¥480/晚</b></span><span class="check">无时间冲突</span></div>
+        </article>
+
+        <article class="ticket">
+          <div class="ticket-bar"><span class="day">DAY 2</span><span class="date">11.03 周二</span><span class="tag">晴 12–22°</span></div>
+          <div class="ticket-body">
+            <div class="leg"><span class="leg-time">08:00–11:30</span><div class="leg-main"><div class="leg-title">大熊猫繁育研究基地</div><div class="leg-note">开园即入，看早间进食</div></div><span class="leg-cost">¥55 × 2</span></div>
+            <div class="transit">景区直通车 · 35 分钟</div>
+            <div class="leg"><span class="leg-time">13:00–15:30</span><div class="leg-main"><div class="leg-title">文殊院 + 香园素斋</div><div class="leg-note">素斋全清淡，符合忌口要求</div></div><span class="leg-cost">¥88 × 2</span></div>
+          </div>
+          <div class="tear" aria-hidden="true"></div>
+          <div class="ticket-foot"><span>宿 <b>太古里亚朵 · ¥480/晚</b></span><span class="check">无时间冲突</span></div>
+        </article>
+
+        <article class="ticket budget">
+          <h3>预算票根 <span class="total">¥7,386</span> <span class="cap">/ 上限 ¥8,000</span></h3>
+          <div class="bar" role="img" aria-label="预算已使用 92%"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="b4"></i><i class="b5"></i></div>
+          <div class="budget-rows">
+            <span><i class="sw b1"></i>交通<span class="amt">¥2,000</span></span>
+            <span><i class="sw b2"></i>住宿 3 晚<span class="amt">¥1,440</span></span>
+            <span><i class="sw b3"></i>餐饮<span class="amt">¥1,600</span></span>
+            <span><i class="sw b4"></i>门票<span class="amt">¥1,090</span></span>
+            <span><i class="sw b5"></i>机动<span class="amt">¥500</span></span>
+          </div>
+          <p class="left">还剩 <b>¥614</b>，够在宽窄巷子添两场变脸演出。</p>
+        </article>
+      </section>
+    </div>
+
+    <form class="composer" id="composer" hidden onsubmit="return false">
+      <label class="sr-only" for="say">输入消息</label>
+      <input id="say" type="text" placeholder="想改哪里，直接说，比如：第二天换成博物馆">
+      <button type="submit">发送</button>
+    </form>
+  </main>
+
+  <!-- 右：City Memory 入口 -->
+  <aside class="card side" aria-label="City Memory 入口">
+    <div class="side-head">
+      <div class="side-title">City <em>Memory</em></div>
+      <div class="side-stats" id="side-stats">已点亮 0 城</div>
+    </div>
+    <div class="cmx-body">
+      <svg class="cmx-art" viewBox="0 0 190 120" aria-hidden="true">
+        <path d="M12 96 C 40 60, 66 92, 92 58 C 116 28, 142 60, 172 34"
+              fill="none" stroke="#14524A" stroke-width="2.5" stroke-dasharray="7 7" stroke-linecap="round" opacity=".55"/>
+        <circle cx="12" cy="96" r="7" fill="#E85D2F" stroke="#fff" stroke-width="2.5"/>
+        <circle cx="92" cy="58" r="7" fill="#E85D2F" stroke="#fff" stroke-width="2.5"/>
+        <circle cx="172" cy="34" r="7" fill="#E85D2F" stroke="#fff" stroke-width="2.5"/>
+        <circle cx="52" cy="70" r="4.5" fill="#14524A" opacity=".25"/>
+        <circle cx="132" cy="46" r="4.5" fill="#14524A" opacity=".25"/>
+      </svg>
+      <h3>每一站，都有它的口袋</h3>
+      <p class="desc">走过的城市在地图上点亮；点开任意城市，存放那一站的照片和所见所闻。</p>
+      <ul class="cmx-feats">
+        <li>45 座城市，全部可点击进入</li>
+        <li>照片与备忘按城市独立存放</li>
+        <li>滚轮缩放、拖拽漫游的大地图</li>
+      </ul>
+      <a class="cmx-open" href="city-memory.html">打开 City Memory</a>
+      <div class="cmx-note">内置页面 · 与本页共用本地数据</div>
+    </div>
+  </aside>
+</div>
+
+<!-- ===== 小R 形象 ===== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <g id="roam-base">
+      <path d="M52 112 Q34 104 30 88" fill="none" stroke="#14524A" stroke-width="11" stroke-linecap="round"/>
+      <path d="M148 118 Q164 116 170 104" fill="none" stroke="#14524A" stroke-width="11" stroke-linecap="round"/>
+      <g transform="rotate(-12 168 96)">
+        <rect x="152" y="86" width="34" height="22" rx="4" fill="#FFFFFF" stroke="#14524A" stroke-width="4"/>
+        <rect x="152" y="86" width="10" height="22" rx="4" fill="#E85D2F"/>
+        <line x1="168" y1="94" x2="180" y2="94" stroke="#14524A" stroke-width="3" stroke-linecap="round"/>
+        <line x1="168" y1="101" x2="176" y2="101" stroke="#D4DED8" stroke-width="3" stroke-linecap="round"/>
+      </g>
+      <rect x="76" y="164" width="16" height="14" rx="7" fill="#0C3B35"/>
+      <rect x="108" y="164" width="16" height="14" rx="7" fill="#0C3B35"/>
+      <rect x="44" y="58" width="112" height="112" rx="28" fill="#FFFFFF" stroke="#14524A" stroke-width="6"/>
+      <line x1="46" y1="138" x2="154" y2="138" stroke="#D4DED8" stroke-width="3" stroke-dasharray="6 7"/>
+      <text x="100" y="158" text-anchor="middle" font-family="Consolas,Menlo,monospace" font-size="12" letter-spacing="3" fill="#5F6E69">ROAM·001</text>
+      <path d="M56 74 Q66 66 76 72" fill="none" stroke="#E85D2F" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="60" cy="76" r="6" fill="#E9EEE9" stroke="#14524A" stroke-width="4"/>
+      <path d="M66 54 Q100 22 134 54 Z" fill="#14524A"/>
+      <rect x="60" y="50" width="80" height="16" rx="8" fill="#0C3B35"/>
+      <circle cx="100" cy="44" r="6" fill="#E85D2F"/>
+    </g>
+    <g id="roam-face-normal">
+      <use href="#roam-base"></use>
+      <circle cx="83" cy="102" r="7" fill="#22332F"/><circle cx="85.5" cy="99.5" r="2.4" fill="#FFFFFF"/>
+      <circle cx="117" cy="102" r="7" fill="#22332F"/><circle cx="119.5" cy="99.5" r="2.4" fill="#FFFFFF"/>
+      <path d="M91 117 Q100 125 109 117" fill="none" stroke="#22332F" stroke-width="4" stroke-linecap="round"/>
+      <ellipse cx="70" cy="116" rx="6.5" ry="4.5" fill="#F5C4B3"/><ellipse cx="130" cy="116" rx="6.5" ry="4.5" fill="#F5C4B3"/>
+    </g>
+    <g id="roam-face-happy">
+      <use href="#roam-base"></use>
+      <path d="M76 104 Q83 95 90 104" fill="none" stroke="#22332F" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M110 104 Q117 95 124 104" fill="none" stroke="#22332F" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M88 114 Q100 128 112 114 Q100 120 88 114 Z" fill="#22332F"/>
+      <ellipse cx="69" cy="115" rx="7" ry="5" fill="#F5C4B3"/><ellipse cx="131" cy="115" rx="7" ry="5" fill="#F5C4B3"/>
+    </g>
+    <g id="roam-face-think">
+      <use href="#roam-base"></use>
+      <path d="M76 90 Q83 85 90 88" fill="none" stroke="#22332F" stroke-width="3.5" stroke-linecap="round"/>
+      <circle cx="86" cy="103" r="6.5" fill="#22332F"/><circle cx="88.5" cy="100.5" r="2.2" fill="#FFFFFF"/>
+      <circle cx="120" cy="103" r="6.5" fill="#22332F"/><circle cx="122.5" cy="100.5" r="2.2" fill="#FFFFFF"/>
+      <circle cx="100" cy="119" r="4.5" fill="none" stroke="#22332F" stroke-width="4"/>
+    </g>
+    <g id="roam-face-oops">
+      <use href="#roam-base"></use>
+      <circle cx="83" cy="103" r="6.5" fill="#22332F"/><circle cx="117" cy="103" r="6.5" fill="#22332F"/>
+      <line x1="90" y1="120" x2="110" y2="120" stroke="#22332F" stroke-width="4" stroke-linecap="round"/>
+      <path d="M100 78 Q106 68 100 62 Q94 68 100 78 Z" fill="#6FA8C9"/>
+      <ellipse cx="70" cy="116" rx="6.5" ry="4.5" fill="#F5C4B3"/><ellipse cx="130" cy="116" rx="6.5" ry="4.5" fill="#F5C4B3"/>
+    </g>
+  </defs>
+</svg>
+
+<!-- ===== 小R 形象设计空间 ===== -->
+<div class="studio" id="studio" hidden>
+  <div class="studio-mask" id="studio-mask"></div>
+  <section class="studio-panel" role="dialog" aria-modal="true" aria-labelledby="studio-title">
+    <div class="studio-head">
+      <h2 id="studio-title">小R <em>形象设计空间</em></h2>
+      <button class="close" type="button" id="studio-close" aria-label="关闭形象设计空间">✕</button>
+    </div>
+    <p class="studio-sub">这里是为小R预留的形象设计位——当前为车票精初稿，后续定稿的设计资产（配色、配饰、动作、立绘）都可以放进这块空间。</p>
+    <div class="studio-grid">
+      <div class="studio-stage">
+        <span class="tag">DESIGN SLOT · 预留设计位</span>
+        <svg class="orbit" viewBox="0 0 200 200" aria-hidden="true">
+          <circle class="ring" cx="100" cy="100" r="86"></circle>
+          <circle class="dot" cx="186" cy="96" r="7"></circle>
+        </svg>
+        <svg class="m roam-svg" viewBox="0 0 200 200" aria-hidden="true"><use id="studio-face" href="#roam-face-normal"></use></svg>
+      </div>
+      <div>
+        <div class="studio-sec">
+          <h3>表情状态（点击切换）</h3>
+          <div class="face-chips" role="group" aria-label="切换小R表情">
+            <button class="face-chip" type="button" data-face="normal" aria-pressed="true"><svg viewBox="0 0 200 200" aria-hidden="true"><use href="#roam-face-normal"></use></svg>待命</button>
+            <button class="face-chip" type="button" data-face="happy" aria-pressed="false"><svg viewBox="0 0 200 200" aria-hidden="true"><use href="#roam-face-happy"></use></svg>开心</button>
+            <button class="face-chip" type="button" data-face="think" aria-pressed="false"><svg viewBox="0 0 200 200" aria-hidden="true"><use href="#roam-face-think"></use></svg>思考</button>
+            <button class="face-chip" type="button" data-face="oops" aria-pressed="false"><svg viewBox="0 0 200 200" aria-hidden="true"><use href="#roam-face-oops"></use></svg>哎呀</button>
+          </div>
+        </div>
+        <div class="studio-sec">
+          <h3>预留设计位（待填充）</h3>
+          <div class="reserve-grid">
+            <div class="reserve-card"><span class="rt">配色方案</span><span class="rs">COLOR · 待定稿</span></div>
+            <div class="reserve-card"><span class="rt">配饰 / 道具</span><span class="rs">PROPS · 待定稿</span></div>
+            <div class="reserve-card"><span class="rt">动作姿态</span><span class="rs">POSE · 待定稿</span></div>
+            <div class="reserve-card"><span class="rt">三视图立绘</span><span class="rs">SHEET · 待定稿</span></div>
+          </div>
+        </div>
+        <p class="studio-note">ROLE: 一张不肯待在抽屉里的车票 · 初稿资产: roam-mascot.html</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+'use strict';
+/* ============================================================
+   Roam 主页：小R对话 + 行程单；City Memory 已拆分为独立内置页
+   （city-memory.html，与本页共用 localStorage + IndexedDB 数据）
+   ============================================================ */
+
+/* ---------- 中间主区状态 ---------- */
+const stateEmpty = document.getElementById('state-empty');
+const stateChat = document.getElementById('state-chat');
+const stateTickets = document.getElementById('state-tickets');
+const composer = document.getElementById('composer');
+const phaseChip = document.getElementById('phase-chip');
+function showMain(name) {
+  stateEmpty.hidden = name !== 'empty';
+  stateChat.hidden = name !== 'chat';
+  stateTickets.hidden = name !== 'tickets';
+  composer.hidden = name !== 'chat';
+  phaseChip.textContent = name === 'empty' ? '随时待命' : name === 'chat' ? '阶段：行程确认' : '行程已生成';
+  document.querySelectorAll('.rail-btn[data-nav]').forEach(b => {
+    b.setAttribute('aria-current', String(b.dataset.nav === name));
+  });
+}
+document.getElementById('start-plan').addEventListener('click', () => {
+  showMain('chat');
+  document.getElementById('say').focus();
+});
+document.querySelectorAll('.rail-btn[data-nav]').forEach(btn => btn.addEventListener('click', () => {
+  showMain(btn.dataset.nav);
+}));
+document.querySelectorAll('.chip').forEach(chip => chip.addEventListener('click', () => {
+  chip.closest('.chips').querySelectorAll('.chip').forEach(c => c.classList.remove('picked'));
+  chip.classList.add('picked');
+}));
+
+/* ---------- 小R 形象设计空间 ---------- */
+const studio = document.getElementById('studio');
+const studioFace = document.getElementById('studio-face');
+const slotFace = document.getElementById('slot-face');
+const FACES = ['normal', 'happy', 'think', 'oops'];
+let studioReturnFocus = null;
+function openStudio() {
+  studioReturnFocus = document.activeElement;
+  studio.hidden = false;
+  document.getElementById('studio-close').focus();
+}
+function closeStudio() {
+  studio.hidden = true;
+  if (studioReturnFocus && studioReturnFocus.focus) studioReturnFocus.focus();
+}
+document.getElementById('mascot-slot').addEventListener('click', openStudio);
+document.getElementById('studio-close').addEventListener('click', closeStudio);
+document.getElementById('studio-mask').addEventListener('click', closeStudio);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !studio.hidden) closeStudio();
+});
+document.querySelectorAll('.face-chip').forEach(chip => chip.addEventListener('click', () => {
+  const face = chip.dataset.face;
+  if (!FACES.includes(face)) return;
+  document.querySelectorAll('.face-chip').forEach(c => c.setAttribute('aria-pressed', String(c === chip)));
+  studioFace.setAttribute('href', '#roam-face-' + face);
+  slotFace.setAttribute('href', '#roam-face-' + face);
+}));
+
+/* ---------- City Memory 数据摘要（与 city-memory.html 共用） ---------- */
+const lsGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+let idb = null;
+const openIDB = () => new Promise((res, rej) => {
+  const rq = indexedDB.open('roam-db', 1);
+  rq.onupgradeneeded = () => rq.result.createObjectStore('photos', { keyPath: 'id' });
+  rq.onsuccess = () => res(rq.result);
+  rq.onerror = () => rej(rq.error);
+});
+async function refreshSideStats() {
+  const visited = lsGet('roam.visited', {});
+  const memos = lsGet('roam.memos', {});
+  let photos = 0;
+  if (idb) {
+    photos = (await new Promise(res => {
+      const rq = idb.transaction('photos', 'readonly').objectStore('photos').getAll();
+      rq.onsuccess = () => res(rq.result || []); rq.onerror = () => res([]);
+    })).length;
+  }
+  const memoN = Object.values(memos).reduce((s, a) => s + a.length, 0);
+  document.getElementById('side-stats').innerHTML =
+    `已点亮 <b>${Object.keys(visited).length}</b> 城 · <b>${photos}</b> 张照片 · <b>${memoN}</b> 笔备忘`;
+}
+
+/* ---------- 启动 ---------- */
+showMain('empty');
+openIDB().then(db => { idb = db; refreshSideStats(); }).catch(() => refreshSideStats());
+refreshSideStats();
+window.addEventListener('focus', refreshSideStats);
+</script>
+</body>
+</html>
